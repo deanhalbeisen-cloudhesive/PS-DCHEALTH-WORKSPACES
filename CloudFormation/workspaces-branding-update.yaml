@@ -1,0 +1,85 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: A template to update Amazon WorkSpaces branding using a Lambda Custom Resource.
+
+Parameters:
+  LogoUrl:
+    Type: String
+    Description: URL to the custom logo image for the WorkSpaces client.
+  SupportEmail:
+    Type: String
+    Description: Support email address that will be visible in the WorkSpaces client.
+  SupportLink:
+    Type: String
+    Description: Support link that will be visible in the WorkSpaces client.
+  ForgotPasswordLink:
+    Type: String
+    Description: Link to the password reset or forgot password page.
+  LoginMessage:
+    Type: String
+    Description: Custom message on the WorkSpaces login screen.
+
+Resources:
+  BrandingFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          import cfnresponse
+          def lambda_handler(event, context):
+              client = boto3.client('workspaces')
+              try:
+                  if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':
+                      response = client.modify_client_properties(
+                          ResourceId='resource_id_here', # Adjust this based on how you identify the resource
+                          ClientProperties={
+                              'ReconnectEnabled': 'ENABLED',
+                              'LogoUrl': event['ResourceProperties']['LogoUrl'],
+                              'SupportEmail': event['ResourceProperties']['SupportEmail'],
+                              'SupportLink': event['ResourceProperties']['SupportLink'],
+                              'ForgotPasswordLink': event['ResourceProperties']['ForgotPasswordLink'],
+                              'LoginMessage': event['ResourceProperties']['LoginMessage']
+                          }
+                      )
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {'Message': 'Branding updated'})
+              except Exception as e:
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Message': str(e)})
+      Handler: index.lambda_handler
+      Runtime: python3.8
+      Role: !GetAtt LambdaExecutionRole.Arn
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Policies:
+        - PolicyName: WorkSpacesBrandingPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ['workspaces:ModifyClientProperties']
+                Resource: '*'
+
+  BrandingUpdater:
+    Type: Custom::BrandingUpdater
+    Properties:
+      ServiceToken: !GetAtt BrandingFunction.Arn
+      LogoUrl: !Ref LogoUrl
+      SupportEmail: !Ref SupportEmail
+      SupportLink: !Ref SupportLink
+      ForgotPasswordLink: !Ref ForgotPasswordLink
+      LoginMessage: !Ref LoginMessage
+
+Outputs:
+  UpdateStatus:
+    Description: "Update status of the WorkSpaces branding."
+    Value: "Branding update process invoked."
+

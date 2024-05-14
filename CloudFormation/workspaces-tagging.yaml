@@ -1,0 +1,58 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  This template provisions an Amazon WorkSpaces instance and applies
+  tags for better resource management.
+
+Parameters:
+  UserName:
+    Type: String
+    Description: The user name for the WorkSpaces user.
+  BundleId:
+    Type: String
+    Description: The bundle ID for the WorkSpaces configuration.
+  DirectoryId:
+    Type: String
+    Description: The directory ID for integration with AWS Directory Service.
+  RunningMode:
+    Type: String
+    Default: AUTO_STOP
+    Description: The running mode for the WorkSpaces (e.g., ALWAYS_ON or AUTO_STOP).
+  VolumeEncryptionKey:
+    Type: String
+    Default: ""
+    Description: KMS key ID for volume encryption, leave empty for no encryption.
+
+Mappings:
+  TagValues:
+    Environment:
+      Value: Production
+    Department:
+      Value: IT
+
+Conditions:
+  IsEncryptionKeyProvided: !Not [!Equals [!Ref VolumeEncryptionKey, ""]]
+
+Resources:
+  Workspace:
+    Type: AWS::WorkSpaces::Workspace
+    Properties:
+      UserName: !Ref UserName
+      BundleId: !Ref BundleId
+      DirectoryId: !Ref DirectoryId
+      UserVolumeEncryptionEnabled: !If [IsEncryptionKeyProvided, true, false]
+      RootVolumeEncryptionEnabled: !If [IsEncryptionKeyProvided, true, false]
+      VolumeEncryptionKey: !If [IsEncryptionKeyProvided, !Ref VolumeEncryptionKey, !Ref "AWS::NoValue"]
+      WorkspaceProperties:
+        RunningMode: !Ref RunningMode
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-workspace"
+        - Key: Environment
+          Value: !FindInMap [TagValues, Environment, Value]
+        - Key: Department
+          Value: !FindInMap [TagValues, Department, Value]
+
+Outputs:
+  WorkspaceId:
+    Description: The ID of the provisioned WorkSpace.
+    Value: !Ref Workspace

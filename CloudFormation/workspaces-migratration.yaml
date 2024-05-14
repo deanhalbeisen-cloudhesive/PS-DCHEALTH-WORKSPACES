@@ -1,0 +1,48 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  This template provisions a new Amazon WorkSpace with a specified bundle,
+  allowing for migration from an old bundle. Ensure to handle data migration and 
+  decommission the old workspace manually or through automation scripts.
+
+Parameters:
+  DirectoryId:
+    Type: String
+    Description: The directory ID for the WorkSpaces.
+  UserName:
+    Type: String
+    Description: The user name for the WorkSpace.
+  BundleId:
+    Type: String
+    Description: The bundle ID for the new WorkSpace.
+  VolumeEncryptionKey:
+    Type: String
+    Default: ""
+    Description: KMS key ID for encrypting the WorkSpace volumes.
+  RootVolumeSize:
+    Type: Number
+    Default: 80
+    Description: The size of the root volume (in GB).
+  UserVolumeSize:
+    Type: Number
+    Default: 50
+    Description: The size of the user volume (in GB).
+
+Resources:
+  Workspace:
+    Type: 'AWS::WorkSpaces::Workspace'
+    Properties:
+      DirectoryId: !Ref DirectoryId
+      UserName: !Ref UserName
+      BundleId: !Ref BundleId
+      UserVolumeEncryptionEnabled: !If [HasVolumeEncryptionKey, true, false]
+      VolumeEncryptionKey: !If [HasVolumeEncryptionKey, !Ref VolumeEncryptionKey, !Ref "AWS::NoValue"]
+      RootVolumeSizeGib: !Ref RootVolumeSize
+      UserVolumeSizeGib: !Ref UserVolumeSize
+
+Conditions:
+  HasVolumeEncryptionKey: !Not [!Equals [!Ref VolumeEncryptionKey, ""]]
+
+Outputs:
+  NewWorkspaceId:
+    Description: The ID of the newly created WorkSpace.
+    Value: !Ref Workspace

@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Template to delete specific AWS WorkSpaces based on Workspace IDs
+
+Parameters:
+  WorkspaceIDList:
+    Type: CommaDelimitedList
+    Description: List of Workspace IDs to delete
+
+Resources:
+  WorkspacesDeletionLambdaExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: WorkspacesDeletionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - workspaces:TerminateWorkspaces
+                Resource: '*'
+
+  WorkspacesDeletionLambda:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt WorkspacesDeletionLambdaExecutionRole.Arn
+      Runtime: python3.8
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          import cfnresponse
+          def handler(event, context):
+              client = boto3.client('workspaces')
+              try:
+                  if event['RequestType'] == 'Delete':
+                      workspace_ids = event['ResourceProperties']['WorkspaceIDList']
+                      client.terminate_workspaces(TerminateWorkspaceRequests=[{'WorkspaceId': id} for id in workspace_ids])
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Message': str(e)})
+
+  WorkspacesDeletionCustomResource:
+    Type: 'Custom::WorkspacesDeletion'
+    Properties:
+      ServiceToken: !GetAtt WorkspacesDeletionLambda.Arn
+      WorkspaceIDList: !Ref WorkspaceIDList

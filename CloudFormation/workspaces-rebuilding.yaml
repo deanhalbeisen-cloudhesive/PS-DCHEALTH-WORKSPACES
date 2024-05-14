@@ -1,0 +1,63 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Template to rebuild Amazon WorkSpaces
+
+Parameters:
+  WorkSpaceIDs:
+    Type: CommaDelimitedList
+    Description: List of WorkSpace IDs to rebuild
+
+Resources:
+
+  # IAM role for Lambda Function
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: WorkSpacesAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - workspaces:RebuildWorkspaces
+                Resource: '*'
+
+  # Lambda Function to Rebuild WorkSpaces
+  RebuildWorkSpacesFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.8
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          def handler(event, context):
+              client = boto3.client('workspaces')
+              try:
+                  if event['RequestType'] in ['Create', 'Update']:
+                      workspaces = event['ResourceProperties']['WorkSpaceIDs']
+                      for wsid in workspaces:
+                          response = client.rebuild_workspaces(
+                              RebuildWorkspaceRequests=[
+                                  {'WorkspaceId': wsid}
+                              ]
+                          )
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {"Message": "Request completed"})
+              except Exception as e:
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {"Message": str(e)})
+
+  # Custom Resource to trigger Lambda
+  TriggerRebuild:
+    Type: 'Custom::RebuildWorkSpaces'
+    Properties:
+      ServiceToken: !GetAtt RebuildWorkSpacesFunction.Arn
+      WorkSpaceIDs: !Ref WorkSpaceIDs

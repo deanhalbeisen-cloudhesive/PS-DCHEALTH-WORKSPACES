@@ -1,0 +1,71 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  This template deploys a Lambda function that can delete AWS Workspaces based on a user ID.
+  The deletion is triggered via a CloudFormation custom resource.
+
+Parameters:
+  UserId:
+    Type: String
+    Description: The ID of the user whose Workspaces will be deleted.
+
+Resources:
+  LambdaExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: 'lambda.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: 'WorkspaceDeletionPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: 'arn:aws:logs:*:*:*'
+              - Effect: 'Allow'
+                Action:
+                  - 'workspaces:DescribeWorkspaces'
+                  - 'workspaces:TerminateWorkspaces'
+                Resource: '*'
+
+  WorkspaceDeletionLambda:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          def lambda_handler(event, context):
+            client = boto3.client('workspaces')
+            user_id = event['ResourceProperties']['UserId']
+            try:
+              workspaces = client.describe_workspaces(DirectoryId=user_id)['Workspaces']
+              workspace_ids = [{'WorkspaceId': ws['WorkspaceId']} for ws in workspaces if ws['UserName'] == user_id]
+              if workspace_ids:
+                client.terminate_workspaces(TerminateWorkspaceRequests=workspace_ids)
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+            except Exception as e:
+              print(e)
+              cfnresponse.send(event, context, cfnresponse.FAILED, {})
+      Handler: 'index.lambda_handler'
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: 'python3.8'
+
+  WorkspaceDeletionTrigger:
+    Type: 'Custom::WorkspaceDeletion'
+    Properties:
+      ServiceToken: !GetAtt WorkspaceDeletionLambda.Arn
+      UserId: !Ref UserId
+
+Outputs:
+  DeletionLambdaFunction:
+    Description: 'ARN of the Lambda function that deletes Workspaces.'
+    Value: !GetAtt WorkspaceDeletionLambda.Arn

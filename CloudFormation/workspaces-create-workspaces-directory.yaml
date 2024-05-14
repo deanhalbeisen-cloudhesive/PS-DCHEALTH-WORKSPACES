@@ -1,0 +1,52 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  AWS CloudFormation template to deploy an AWS WorkSpaces directory
+  in two specified subnets.
+
+Parameters:
+  DirectoryName:
+    Type: String
+    Description: The name of the directory for WorkSpaces.
+
+  VPCId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC in which to create the WorkSpaces directory.
+
+  SubnetId1:
+    Type: AWS::EC2::Subnet::Id
+    Description: The ID of the first subnet for the WorkSpaces directory.
+
+  SubnetId2:
+    Type: AWS::EC2::Subnet::Id
+    Description: The ID of the second subnet for the WorkSpaces directory.
+
+  Password:
+    Type: String
+    NoEcho: true
+    Description: The password for the directory administrator.
+
+Resources:
+  WorkSpacesDirectory:
+    Type: AWS::DirectoryService::SimpleAD
+    Properties:
+      Name: !Ref DirectoryName
+      Password: !Ref Password
+      Size: Small
+      VpcSettings:
+        VpcId: !Ref VPCId
+        SubnetIds:
+          - !Ref SubnetId1
+          - !Ref SubnetId2
+
+Outputs:
+  DirectoryId:
+    Description: The ID of the created directory.
+    Value: !Ref WorkSpacesDirectory
+
+  Subnet1:
+    Description: The ID of the first subnet used.
+    Value: !Ref SubnetId1
+
+  Subnet2:
+    Description: The ID of the second subnet used.
+    Value: !Ref SubnetId2

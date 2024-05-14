@@ -1,0 +1,42 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS CloudFormation Template to create encrypted Amazon WorkSpaces for a list of users.
+
+Parameters:
+  DirectoryId:
+    Type: String
+    Description: The Directory ID for the WorkSpaces.
+  
+  BundleId:
+    Type: String
+    Description: The Bundle ID to use for each WorkSpace.
+  
+  KMSKeyId:
+    Type: String
+    Description: The ID of the KMS Key used for encrypting the volumes.
+  
+  UserList:
+    Type: CommaDelimitedList
+    Description: Comma-separated list of user IDs.
+
+Resources:
+  Workspace:
+    Type: AWS::WorkSpaces::Workspace
+    Properties:
+      DirectoryId: !Ref DirectoryId
+      UserName:
+        Fn::Sub:
+          - "${EachUser}"
+          - EachUser: !Ref UserList
+      BundleId: !Ref BundleId
+      UserVolumeEncryptionEnabled: true
+      RootVolumeEncryptionEnabled: true
+      VolumeEncryptionKey: !Ref KMSKeyId
+
+Outputs:
+  WorkSpaceIds:
+    Description: The IDs of the created WorkSpaces.
+    Value:
+      Fn::Join:
+        - ','
+        - !Ref Workspace
+
